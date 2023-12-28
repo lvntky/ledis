@@ -6,10 +6,30 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define PORT_ADDR 3408
-#define MAX_BACKLOG 9999
+#define MAX_BACKLOG 128
 #define MAX_SERVER_BUFFER_SIZE 4096
+
+pthread_mutex_t server_mutex;
+
+void *handle_client(void *client_socket_fd_ptr) {
+  int client_socket_fd =  *((int *)client_socket_fd_ptr);
+  char server_read_buffer[MAX_SERVER_BUFFER_SIZE] = {0};
+
+  int server_read_status = read(client_socket_fd, server_read_buffer, (MAX_SERVER_BUFFER_SIZE - 1));
+
+  if (server_read_status < 0) {
+      perror("Ledis can't read from client to its buffer ");
+  } else {
+      printf("[CLIENT] %s\n", server_read_buffer);
+  }
+  
+  close(client_socket_fd);
+  free(client_socket_fd_ptr);
+  pthread_exit(NULL);
+}
 
 int main(int argc, char **argv) {
 
@@ -56,33 +76,42 @@ int main(int argc, char **argv) {
     printf("Ledis listening on port %d\n", PORT_ADDR);
   }
 
+  pthread_t tid; // Thread ID
+
   /**
      Listen from client
      TODO: make it concurrent
    */
   while(1) {
-    int client_socket_fd = 0;
-    if ((client_socket_fd = accept(
-				   server_socket_fd, (struct sockaddr *)&sockaddr, &socket_len)) < 0) {
+    int *client_socket_fd_ptr = (int *)malloc(sizeof(int));
+    *client_socket_fd_ptr = accept(server_socket_fd, (struct sockaddr *)&sockaddr, &socket_len);
+    
+    if (*client_socket_fd_ptr < 0)
+    {
       perror("Socket can't accept any new connection ");
-      //exit(1); /* TODO: Don't terminate on every accept fail */
+      free(client_socket_fd_ptr);
+      exit(1);
     }
-    char server_read_buffer[MAX_SERVER_BUFFER_SIZE] = {0};
 
-    int server_read_status = read(client_socket_fd, server_read_buffer, (MAX_SERVER_BUFFER_SIZE - 1)); // -1 for NULL terminator
+    pthread_mutex_lock(&server_mutex);
 
-    if(server_read_status < 0) {
-      perror("Ledis can't read from client to it's buffer ");
-    }
-    else {
-      printf("[CLIENT] %s\n", server_read_buffer);
-    }
+    /**
+     * Create a new thread 
+     * to handle new client
+    */
+   if (pthread_create(&tid, NULL, handle_client, (void *)client_socket_fd_ptr) != 0) {
+    perror("Failed to create a new thread for client ");
+    close(*client_socket_fd_ptr);
+    free(client_socket_fd_ptr);
+    pthread_mutex_unlock(&server_mutex);
+    exit(1);
+   }
+  
+   pthread_mutex_unlock(&server_mutex);
+    
   }
 
-  /**
-   * Todo: Concurrent Server
-   */
-  
+  pthread_mutex_destroy(&server_mutex); 
   
   return 0;
 }
