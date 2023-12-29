@@ -7,23 +7,27 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
-
-#define PORT_ADDR 3408
-#define MAX_BACKLOG 128
-#define MAX_SERVER_BUFFER_SIZE 4096
+#include <string.h>
+#include "include/ledis.h"
+#include "include/ledis_commnads.h"
 
 pthread_mutex_t server_mutex;
 
 void *handle_client(void *client_socket_fd_ptr) {
   int client_socket_fd =  *((int *)client_socket_fd_ptr);
   char server_read_buffer[MAX_SERVER_BUFFER_SIZE] = {0};
-
+  char client_read_buffer[MAX_SERVER_BUFFER_SIZE] = {0};
+  
   int server_read_status = read(client_socket_fd, server_read_buffer, (MAX_SERVER_BUFFER_SIZE - 1));
 
   if (server_read_status < 0) {
       perror("Ledis can't read from client to its buffer ");
   } else {
       printf("[CLIENT] %s\n", server_read_buffer);
+      if(strncmp(server_read_buffer, LEDIS_PING, strlen(LEDIS_PING)) == 0) {
+	strncpy(client_read_buffer, "PONG", strlen("PONG"));
+        send(client_socket_fd, client_read_buffer, strlen(client_read_buffer), 0);
+      }
   }
   
   close(client_socket_fd);
