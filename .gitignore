@@ -137,3 +137,5 @@ flycheck_*.el
 
 ## ccls cache (coming out of lsp)
 .ccls-cache/
+build/
+.settings.json
