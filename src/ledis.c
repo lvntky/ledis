@@ -9,14 +9,31 @@
 #include <pthread.h>
 #include <string.h>
 #include <assert.h>
+#include <arpa/inet.h>
 #include "../include/ledis.h"
 #include "../include/ledis_commnads.h"
 
 pthread_mutex_t server_mutex;
 
+char *idnetify_client(int client_socket_fd)
+{
+	char *client_ip = (char *)malloc(INET_ADDRSTRLEN);
+	struct sockaddr_in client_sock_addr;
+	socklen_t client_sock_addr_len = sizeof(client_sock_addr);
+
+	getpeername(client_socket_fd, (struct sockaddr *)&client_sock_addr,
+		    &client_sock_addr_len);
+
+	inet_ntop(AF_INET, &(client_sock_addr.sin_addr), client_ip,
+		  INET_ADDRSTRLEN);
+
+	return client_ip;
+}
+
 void *handle_client(void *client_socket_fd_ptr)
 {
 	int client_socket_fd = *((int *)client_socket_fd_ptr);
+	char *client_ip = idnetify_client(client_socket_fd);
 	char server_read_buffer[MAX_SERVER_BUFFER_SIZE] = { 0 };
 	char client_read_buffer[MAX_SERVER_BUFFER_SIZE] = { 0 };
 
@@ -26,7 +43,7 @@ void *handle_client(void *client_socket_fd_ptr)
 	if (server_read_status < 0) {
 		perror("Ledis can't read from client to its buffer ");
 	} else {
-		printf("[CLIENT] %s\n", server_read_buffer);
+		printf("[CLIENT - %s] %s\n", client_ip, server_read_buffer);
 		if (strncmp(server_read_buffer, LEDIS_PING,
 			    strlen(LEDIS_PING)) == 0) {
 			strncpy(client_read_buffer, "PONG", strlen("PONG"));
@@ -77,7 +94,7 @@ int main(int argc, char **argv)
 		perror("Can't bind the server socket");
 		exit(-1);
 	} else {
-		printf("Server bind on port localhost:%d/\n", PORT_ADDR);
+		printf("Ledis bind on localhost!\n");
 	}
 
 	/**
@@ -89,7 +106,7 @@ int main(int argc, char **argv)
 		perror("Server socket can't listen new connection ");
 		exit(1);
 	} else {
-		printf("Ledis listening on port %d\n", PORT_ADDR);
+		printf("Ledis listening port %d\n", PORT_ADDR);
 	}
 
 	pthread_t tid; // Thread ID
