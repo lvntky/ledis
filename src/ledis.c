@@ -54,6 +54,7 @@ void *handle_client(void *client_socket_fd_ptr)
 
 	close(client_socket_fd);
 	free(client_socket_fd_ptr);
+	free(client_ip);
 	pthread_exit(NULL);
 }
 
